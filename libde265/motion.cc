@@ -231,6 +231,7 @@ void mc_chroma(const base_context* ctx,
 
     if (xIntOffsC>=1 && nPbWC+xIntOffsC<=wC-2 &&
         yIntOffsC>=1 && nPbHC+yIntOffsC<=hC-2) {
+      //printf("math: xIntOffsC + yIntOffsC*ref_stride = %d\n", xIntOffsC + yIntOffsC*ref_stride);
       src_ptr = &ref[xIntOffsC + yIntOffsC*ref_stride];
       src_stride = ref_stride;
     }
@@ -244,6 +245,7 @@ void mc_chroma(const base_context* ctx,
           padbuf[x+extra_left + (y+extra_top)*(MAX_CU_SIZE+16)] = ref[ xA + yA*ref_stride ];
         }
       }
+      //printf("alt math ");
 
       src_ptr = &padbuf[extra_left + extra_top*(MAX_CU_SIZE+16)];
       src_stride = MAX_CU_SIZE+16;
@@ -346,7 +348,17 @@ void generate_inter_prediction_samples(base_context* ctx,
 
       const de265_image* refPic = ctx->get_image(shdr->RefPicList[l][vi->refIdx[l]]);
 
-      logtrace(LogMotion, "refIdx: %d -> dpb[%d]\n", vi->refIdx[l], shdr->RefPicList[l][vi->refIdx[l]]);
+      printf( "refIdx: %d -> dpb[%d]\n", vi->refIdx[l], shdr->RefPicList[l][vi->refIdx[l]]);
+      if (refPic) {
+          printf( "Using RefID: %d (%d))\n", refPic->get_ID(), refPic->BitDepth_C );
+
+          if (refPic->BitDepth_C != img->BitDepth_C) {
+              printf("WARNING REF DIFFERS\n");
+          }
+      }
+
+      printf( "Image: %d (%d) -- %p (%d)\n", img->get_ID(), img->BitDepth_Y, &img->get_sps(), img->get_sps().BitDepth_Y );
+
 
       if (!refPic || refPic->PicState == UnusedForReference) {
         img->integrity = INTEGRITY_DECODING_ERRORS;

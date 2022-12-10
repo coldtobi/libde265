@@ -44,12 +44,16 @@ decoded_picture_buffer::~decoded_picture_buffer()
 void decoded_picture_buffer::log_dpb_content() const
 {
   for (int i=0;i<dpb.size();i++) {
-    loginfo(LogHighlevel, " DPB %d: POC=%d, ID=%d %s %s\n", i,
+    printf(" DPB %d: POC=%d, ID=%d %s %s\t(vps=%p sps=%p pps=%p)\n", i,
             dpb[i]->PicOrderCntVal,
             dpb[i]->get_ID(),
             dpb[i]->PicState == UnusedForReference ? "unused" :
             dpb[i]->PicState == UsedForShortTermReference ? "short-term" : "long-term",
-            dpb[i]->PicOutputFlag ? "output" : "---");
+            dpb[i]->PicOutputFlag ? "output" : "---",
+            &dpb[i]->get_vps(),
+            &dpb[i]->get_sps(),
+            &dpb[i]->get_pps()
+    );
   }
 }
 
@@ -77,8 +81,8 @@ int decoded_picture_buffer::DPB_index_of_picture_with_POC(int poc, int currentID
 {
   logdebug(LogHeaders,"DPB_index_of_picture_with_POC POC=%d\n",poc);
 
-  //log_dpb_content(ctx);
-  //loginfo(LogDPB,"searching for short-term reference POC=%d\n",poc);
+  log_dpb_content();
+  printf("searching for short-term reference POC=%d\n",poc);
 
   if (preferLongTerm) {
     for (int k=0;k<dpb.size();k++) {

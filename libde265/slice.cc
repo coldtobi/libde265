@@ -2843,9 +2843,9 @@ void read_coding_tree_unit(thread_context* tctx)
   int xCtbPixels = xCtb << sps.Log2CtbSizeY;
   int yCtbPixels = yCtb << sps.Log2CtbSizeY;
 
-  logtrace(LogSlice,"----- decode CTB %d;%d (%d;%d) POC=%d, SliceAddrRS=%d\n",
-           xCtbPixels,yCtbPixels, xCtb,yCtb,
-           tctx->img->PicOrderCntVal, tctx->shdr->SliceAddrRS);
+  //printf("----- decode CTB %d;%d (%d;%d) POC=%d, SliceAddrRS=%d\n",
+   //        xCtbPixels,yCtbPixels, xCtb,yCtb,
+   //        tctx->img->PicOrderCntVal, tctx->shdr->SliceAddrRS);
 
   img->set_SliceAddrRS(xCtb, yCtb, tctx->shdr->SliceAddrRS);
 
@@ -4589,7 +4589,7 @@ void read_coding_quadtree(thread_context* tctx,
                           int log2CbSize,
                           int ctDepth)
 {
-  logtrace(LogSlice,"- read_coding_quadtree %d;%d cbsize:%d depth:%d POC:%d\n",x0,y0,1<<log2CbSize,ctDepth,tctx->img->PicOrderCntVal);
+  //printf("- read_coding_quadtree %d;%d cbsize:%d depth:%d POC:%d\n",x0,y0,1<<log2CbSize,ctDepth,tctx->img->PicOrderCntVal);
 
   de265_image* img = tctx->img;
   const seq_parameter_set& sps = img->get_sps();

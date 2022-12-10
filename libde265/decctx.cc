@@ -540,6 +540,8 @@ de265_error decoder_context::read_vps_NAL(bitreader& reader)
     new_vps->dump(param_vps_headers_fd);
   }
 
+  printf("### NEW VPS: %p (ID=%d) replaces %p\n", new_vps.get(), new_vps->video_parameter_set_id,  vps[ new_vps->video_parameter_set_id ].get());
+
   vps[ new_vps->video_parameter_set_id ] = new_vps;
 
   return DE265_OK;
@@ -560,6 +562,9 @@ de265_error decoder_context::read_sps_NAL(bitreader& reader)
     new_sps->dump(param_sps_headers_fd);
   }
 
+  printf("### NEW SPS: %p (CBits:%d) ID:%d, replaces %p\n",
+          new_sps.get(), new_sps->BitDepth_C, new_sps->seq_parameter_set_id, sps[ new_sps->seq_parameter_set_id ].get());
+
   sps[ new_sps->seq_parameter_set_id ] = new_sps;
 
   // Remove the all PPS that referenced the old SPS because parameters may have changed and we do not want to
@@ -567,6 +572,10 @@ de265_error decoder_context::read_sps_NAL(bitreader& reader)
   
   for (auto& p : pps) {
     if (p && p->seq_parameter_set_id == new_sps->seq_parameter_set_id) {
+
+
+
+
       p = nullptr;
     }
   }
@@ -586,9 +595,12 @@ de265_error decoder_context::read_pps_NAL(bitreader& reader)
     new_pps->dump(param_pps_headers_fd);
   }
 
+  printf("### NEW PPS %p (%d) replaces %p\n", new_pps.get(), new_pps->pic_parameter_set_id, pps[(int)new_pps->pic_parameter_set_id].get());
+
   if (success) {
     pps[ (int)new_pps->pic_parameter_set_id ] = new_pps;
   }
+
 
   return success ? DE265_OK : DE265_WARNING_PPS_HEADER_INVALID;
 }
@@ -631,6 +643,7 @@ de265_error decoder_context::read_slice_NAL(bitreader& reader, NAL_unit* nal, na
   // --- read slice header ---
 
   slice_segment_header* shdr = new slice_segment_header;
+  printf("## NEW SHDR: %p\n", shdr);
   bool continueDecoding;
   de265_error err = shdr->read(&reader,this, &continueDecoding);
   if (!continueDecoding) {
@@ -806,12 +819,12 @@ de265_error decoder_context::decode_slice_unit_sequential(image_unit* imgunit,
 {
   de265_error err = DE265_OK;
 
-  /*
-  printf("decode slice POC=%d addr=%d, img=%p\n",
+/*
+  printf("decode slice POC=%d addr=%d, img=%p (ID=%d)\n",
          sliceunit->shdr->slice_pic_order_cnt_lsb,
-         sliceunit->shdr->slice_segment_address,
-         imgunit->img);
-  */
+         sliceunit->shdr->slice_segment_address, imgunit->img,
+         imgunit->img ? imgunit->img->get_ID() : -1 );
+*/
 
   remove_images_from_dpb(sliceunit->shdr->RemoveReferencesList);
 
@@ -1236,7 +1249,9 @@ de265_error decoder_context::decode_NAL(NAL_unit* nal)
 
 
   if (nal_hdr.nal_unit_type<32) {
+    printf("<SLICE>\n");
     err = read_slice_NAL(reader, nal, nal_hdr);
+    printf("</SLICE>\n");
   }
   else switch (nal_hdr.nal_unit_type) {
     case NAL_UNIT_VPS_NUT:
@@ -1441,6 +1456,8 @@ int decoder_context::generate_unavailable_reference_picture(const seq_parameter_
   img->PicOutputFlag = false;
   img->PicState = (longTerm ? UsedForLongTermReference : UsedForShortTermReference);
   img->integrity = INTEGRITY_UNAVAILABLE_REFERENCE;
+
+  printf("## CREATED REF IMAGE %d (%d bits) sps: %p\n" , img->get_ID(), img->BitDepth_C, &img->get_sps());
 
   return idx;
 }
@@ -1648,6 +1665,15 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
   for (int i=0;i<NumPocStCurrBefore;i++) {
     int k = dpb.DPB_index_of_picture_with_POC(PocStCurrBefore[i], currentID);
 
+    if(k != -1 ) {
+        auto refimage = dpb.get_image(k);
+        if(&refimage->get_sps() != &img->get_sps()) {
+            printf("Warning: Found reference image ID=%d has been created with a different SPS (ref: %p != img: %p).\n",
+                    refimage->get_ID(), &refimage->get_sps(), &img->get_sps());
+            k=-1;
+        }
+    }
+
     //printf("st curr before, poc=%d -> idx=%d\n",PocStCurrBefore[i], k);
 
     RefPicSetStCurrBefore[i] = k; // -1 == "no reference picture"
@@ -1671,6 +1697,14 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
   for (int i=0;i<NumPocStCurrAfter;i++) {
     int k = dpb.DPB_index_of_picture_with_POC(PocStCurrAfter[i], currentID);
 
+    if(k != -1 ) {
+        auto refimage = dpb.get_image(k);
+        if(&refimage->get_sps() != &img->get_sps()) {
+            printf("Warning: Found reference image ID=%d has been created with a different SPS (ref: %p != img: %p).\n",
+                    refimage->get_ID(), &refimage->get_sps(), &img->get_sps());
+            k=-1;
+        }
+    }
     //printf("st curr after, poc=%d -> idx=%d\n",PocStCurrAfter[i], k);
 
     RefPicSetStCurrAfter[i] = k; // -1 == "no reference picture"
@@ -1694,6 +1728,15 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
 
   for (int i=0;i<NumPocStFoll;i++) {
     int k = dpb.DPB_index_of_picture_with_POC(PocStFoll[i], currentID);
+    if(k != -1 ) {
+        auto refimage = dpb.get_image(k);
+        if(&refimage->get_sps() != &img->get_sps()) {
+            printf("Warning: Found reference image ID=%d has been created with a different SPS (ref: %p != img: %p).\n",
+                    refimage->get_ID(), &refimage->get_sps(), &img->get_sps());
+            k=-1;
+        }
+    }
+
     // if (k<0) { assert(false); } // IGNORE
 
     RefPicSetStFoll[i] = k; // -1 == "no reference picture"
@@ -1711,7 +1754,7 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
           {
             if (dpbimg->PicState != UnusedForReference) {
               removeReferencesList.push_back(dpbimg->get_ID());
-              //printf("will remove ID %d (b)\n",dpbimg->get_ID());
+              printf("will remove ID %d (b)\n",dpbimg->get_ID());
 
               dpbimg->removed_at_picture_id = img->get_ID();
             }
@@ -1850,26 +1893,26 @@ bool decoder_context::construct_reference_picture_lists(slice_segment_header* hd
 
   // show reference picture lists
 
-  loginfo(LogHeaders,"RefPicList[0] =");
+  printf("RefPicList[0] =");
   for (rIdx=0; rIdx<hdr->num_ref_idx_l0_active; rIdx++) {
-    loginfo(LogHeaders,"* [%d]=%d (LT=%d)",
+    printf("* [%d]=%d (LT=%d)",
             hdr->RefPicList[0][rIdx],
             hdr->RefPicList_POC[0][rIdx],
             hdr->LongTermRefPic[0][rIdx]
             );
   }
-  loginfo(LogHeaders,"*\n");
+  printf("*\n");
 
   if (hdr->slice_type == SLICE_TYPE_B) {
-    loginfo(LogHeaders,"RefPicList[1] =");
+      printf("RefPicList[1] =");
     for (rIdx=0; rIdx<hdr->num_ref_idx_l1_active; rIdx++) {
-      loginfo(LogHeaders,"* [%d]=%d (LT=%d)",
+        printf("* [%d]=%d (LT=%d)",
               hdr->RefPicList[1][rIdx],
               hdr->RefPicList_POC[1][rIdx],
               hdr->LongTermRefPic[1][rIdx]
               );
     }
-    loginfo(LogHeaders,"*\n");
+    printf("*\n");
   }
 
   return true;

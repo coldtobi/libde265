@@ -342,6 +342,8 @@ void put_epel_hv_fallback(int16_t *dst, ptrdiff_t dst_stride,
   for (int y=-extra_top;y<nPbHC+extra_bottom;y++) {
     const pixel_t* p = &src[y*src_stride - extra_left];
 
+    //printf("%p -- &p[%d] = %p \n", src, y*src_stride - extra_left, &src[y*src_stride - extra_left]);
+
     for (int x=0;x<nPbWC;x++) {
       int16_t v;
       switch (xFracC) {
