@@ -292,6 +292,11 @@ void generate_inter_prediction_samples(base_context* ctx,
   const pic_parameter_set* pps = shdr->pps.get();
   const seq_parameter_set* sps = pps->sps.get();
 
+  if( sps != img->get_shared_sps().get()) {
+      printf("WARNING: SPS of image (ID=%d, sps=%p) and slice->pps->sps (%p, sps=%p) are different.\n",
+              img->get_ID(), img->get_shared_sps().get(), shdr, sps);
+  }
+
   const int SubWidthC  = sps->SubWidthC;
   const int SubHeightC = sps->SubHeightC;
 
@@ -346,7 +351,19 @@ void generate_inter_prediction_samples(base_context* ctx,
 
       const de265_image* refPic = ctx->get_image(shdr->RefPicList[l][vi->refIdx[l]]);
 
-      logtrace(LogMotion, "refIdx: %d -> dpb[%d]\n", vi->refIdx[l], shdr->RefPicList[l][vi->refIdx[l]]);
+      if (refPic) {
+          if (refPic->BitDepth_C != img->BitDepth_C || refPic->BitDepth_Y != img->BitDepth_Y) {
+              printf( "#######################  TROUBLE AHEAD: REF PICTURE DIFFERS IS BITDEPTH ####################### \n ");
+              printf("shdr=%p , img=%p (ID=%d), refPic=%p (ID=%d) ", shdr, img, img->get_ID(), refPic, refPic->get_ID());
+              printf( "refIdx: %d -> dpb[%d] ", vi->refIdx[l], shdr->RefPicList[l][vi->refIdx[l]]);
+              printf( "refPic->BitDepth_C=%d, img->BitDepth_C=%d ", refPic->BitDepth_C, img->BitDepth_C );
+              printf( "refPic->BitDepth_Y=%d, img->BitDepth_Y=%d\n", refPic->BitDepth_Y, img->BitDepth_Y );
+              //refPic = nullptr;;
+          }
+      }
+
+      // printf( "Image: %p (%d) -- %p (%d)\n", img, img->get_ID(), &img->get_sps(), img->get_sps().BitDepth_Y );
+
 
       if (!refPic || refPic->PicState == UnusedForReference) {
         img->integrity = INTEGRITY_DECODING_ERRORS;

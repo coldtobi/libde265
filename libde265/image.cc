@@ -125,6 +125,9 @@ static int  de265_image_get_buffer(de265_decoder_context* ctx,
 
   bool alloc_failed = false;
 
+  printf("alloc for ID %d sized: %d %d \n", img->get_ID(), luma_height   * luma_bpl   + MEMORY_PADDING
+          , chroma_height * chroma_bpl + MEMORY_PADDING);
+
   uint8_t* p[3] = { 0,0,0 };
   p[0] = (uint8_t *)ALLOC_ALIGNED_16(luma_height   * luma_bpl   + MEMORY_PADDING);
   if (p[0]==NULL) { alloc_failed=true; }
@@ -248,6 +251,9 @@ de265_error de265_image::alloc_image(int w,int h, enum de265_chroma c,
                 will not be freed. */
 
   ID = s_next_image_ID++;
+
+  printf("### GENERATED IMAGE %p WITH ID %d sps: %p (SPS_ID=%d)\n" , this, ID, sps.get(), sps.get()->seq_parameter_set_id);
+
   removed_at_picture_id = std::numeric_limits<int32_t>::max();
 
   decctx = dctx;
@@ -470,6 +476,7 @@ de265_error de265_image::alloc_image(int w,int h, enum de265_chroma c,
 
 de265_image::~de265_image()
 {
+  printf("### DESTROY IMAGE %p #%d\n", this, this->ID);
   release();
 
   // free progress locks

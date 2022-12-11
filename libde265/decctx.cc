@@ -540,7 +540,10 @@ de265_error decoder_context::read_vps_NAL(bitreader& reader)
     new_vps->dump(param_vps_headers_fd);
   }
 
-  vps[ new_vps->video_parameter_set_id ] = new_vps;
+  static int counter = 0;
+  printf("### %d. NEW VPS: %p (ID=%d) replaces %p\n", ++counter, new_vps.get(), new_vps->video_parameter_set_id,  vps[ new_vps->video_parameter_set_id ].get());
+
+ vps[ new_vps->video_parameter_set_id ] = new_vps;
 
   return DE265_OK;
 }
@@ -559,6 +562,10 @@ de265_error decoder_context::read_sps_NAL(bitreader& reader)
   if (param_sps_headers_fd>=0) {
     new_sps->dump(param_sps_headers_fd);
   }
+
+  static int counter = 0;
+  printf("### %d. NEW SPS: %p (CBits:%d) ID:%d, replaces %p\n",
+          ++counter, new_sps.get(), new_sps->BitDepth_C, new_sps->seq_parameter_set_id, sps[ new_sps->seq_parameter_set_id ].get());
 
   sps[ new_sps->seq_parameter_set_id ] = new_sps;
 
@@ -585,6 +592,9 @@ de265_error decoder_context::read_pps_NAL(bitreader& reader)
   if (param_pps_headers_fd>=0) {
     new_pps->dump(param_pps_headers_fd);
   }
+
+  static int counter = 0;
+  printf("### %d. NEW PPS %p (%d) replaces %p\n", ++counter, new_pps.get(), new_pps->pic_parameter_set_id, pps[(int)new_pps->pic_parameter_set_id].get());
 
   if (success) {
     pps[ (int)new_pps->pic_parameter_set_id ] = new_pps;
@@ -644,7 +654,6 @@ de265_error decoder_context::read_slice_NAL(bitreader& reader, NAL_unit* nal, na
     shdr->dump_slice_segment_header(this, param_slice_headers_fd);
   }
 
-
   if (process_slice_segment_header(shdr, &err, nal->pts, &nal_hdr, nal->user_data) == false)
     {
       if (img!=NULL) img->integrity = INTEGRITY_NOT_DECODED;
@@ -677,7 +686,6 @@ de265_error decoder_context::read_slice_NAL(bitreader& reader, NAL_unit* nal, na
     image_units.push_back(imgunit);
   }
 
-
   // --- add slice to current picture ---
 
   if ( ! image_units.empty() ) {
@@ -692,6 +700,14 @@ de265_error decoder_context::read_slice_NAL(bitreader& reader, NAL_unit* nal, na
 
     image_units.back()->slice_units.push_back(sliceunit);
   }
+
+  printf("## NEW SHDR: %p -- pps=%p", shdr, shdr->pps.get());
+  if(img) printf("\thave img %p: ID=%d vps=%p sps=%p pps=%p\n",
+                              img, img->get_ID(),
+                              img->has_pps() ? &img->get_vps() : nullptr,
+                              img->has_sps() ? &img->get_sps() : nullptr,
+                              img->has_pps() ? &img->get_pps() : nullptr);
+
 
   bool did_work;
   err = decode_some(&did_work);
@@ -893,6 +909,10 @@ de265_error decoder_context::decode_slice_unit_parallel(image_unit* imgunit,
   de265_error err = DE265_OK;
 
   remove_images_from_dpb(sliceunit->shdr->RemoveReferencesList);
+
+  printf("\n####DPB start of decoder_context::decode_slice_unit_parallel()\n");
+  this->dpb.log_dpb_content();
+  printf("####\n");
 
   /*
   printf("-------- decode --------\n");
@@ -1236,7 +1256,12 @@ de265_error decoder_context::decode_NAL(NAL_unit* nal)
 
 
   if (nal_hdr.nal_unit_type<32) {
+    static int slicecounter=0;
+    ++slicecounter;
+    printf("<SLICE #%d>\n", slicecounter);
     err = read_slice_NAL(reader, nal, nal_hdr);
+    printf("</SLICE #%d>\n", slicecounter);
+
   }
   else switch (nal_hdr.nal_unit_type) {
     case NAL_UNIT_VPS_NUT:
@@ -1442,6 +1467,8 @@ int decoder_context::generate_unavailable_reference_picture(const seq_parameter_
   img->PicState = (longTerm ? UsedForLongTermReference : UsedForShortTermReference);
   img->integrity = INTEGRITY_UNAVAILABLE_REFERENCE;
 
+  printf("## CREATED REF IMAGE %d (%d bits) sps: %p\n" , img->get_ID(), img->BitDepth_C, &img->get_sps());
+
   return idx;
 }
 
@@ -1455,6 +1482,13 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
   std::vector<int> removeReferencesList;
 
   const int currentID = img->get_ID();
+
+  printf("Current Image: %d (vps=%p sps=%p pps=%p)\n" , currentID,
+          img->has_vps() ? &img->get_vps() : nullptr ,
+          img->has_sps() ? &img->get_sps() : nullptr ,
+          img->has_pps() ? &img->get_pps() : nullptr
+          );
+
 
 
   if (isIRAP(nal_unit_type) && NoRaslOutputFlag) {
@@ -1482,7 +1516,7 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
         removeReferencesList.push_back(img->get_ID());
         img->removed_at_picture_id = img->get_ID();
 
-        //printf("will remove ID %d (a)\n",img->get_ID());
+        printf("will remove ID %d (a)\n",img->get_ID());
       }
     }
   }
@@ -1513,7 +1547,7 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
       {
         if (rps->UsedByCurrPicS0[i]) {
           PocStCurrBefore[j++] = img->PicOrderCntVal + rps->DeltaPocS0[i];
-          //printf("PocStCurrBefore = %d\n",PocStCurrBefore[j-1]);
+          printf("PocStCurrBefore = %d\n",PocStCurrBefore[j-1]);
         }
         else {
           PocStFoll[k++] = img->PicOrderCntVal + rps->DeltaPocS0[i];
@@ -1531,7 +1565,7 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
       {
         if (rps->UsedByCurrPicS1[i]) {
           PocStCurrAfter[j++] = img->PicOrderCntVal + rps->DeltaPocS1[i];
-          //printf("PocStCurrAfter = %d\n",PocStCurrAfter[j-1]);
+          printf("PocStCurrAfter = %d\n",PocStCurrAfter[j-1]);
         }
         else {
           PocStFoll[k++] = img->PicOrderCntVal + rps->DeltaPocS1[i];
@@ -1591,6 +1625,10 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
       k = dpb.DPB_index_of_picture_with_POC(PocLtCurr[i], currentID, true);
     }
 
+    printf("# RefPicSetLtCurr[%d]= %d ", i, k);
+    if (k != -1 ) printf("(image-ID=%d, POC=%d)", dpb.get_image(k)->get_ID(), dpb.get_image(k)->PicOrderCntVal);
+    printf("\n");
+
     RefPicSetLtCurr[i] = k; // -1 == "no reference picture"
     if (k>=0) picInAnyList[k]=true;
     else {
@@ -1618,6 +1656,10 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
     else {
       k = dpb.DPB_index_of_picture_with_POC(PocLtFoll[i], currentID, true);
     }
+
+    printf("# RefPicSetLtFoll[%d]= %d ", i, k);
+    if (k != -1 ) printf("(image-ID=%d, POC=%d)", dpb.get_image(k)->get_ID(), dpb.get_image(k)->PicOrderCntVal);
+    printf("\n");
 
     RefPicSetLtFoll[i] = k; // -1 == "no reference picture"
     if (k>=0) picInAnyList[k]=true;
@@ -1650,6 +1692,10 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
 
     //printf("st curr before, poc=%d -> idx=%d\n",PocStCurrBefore[i], k);
 
+    printf("# RefPicSetStCurrBefore[%d]= %d for POC=%d ", i, k, PocStCurrBefore[i]);
+    if (k != -1 ) printf("(image-ID=%d, POC=%d)", dpb.get_image(k)->get_ID(), dpb.get_image(k)->PicOrderCntVal);
+    printf("\n");
+
     RefPicSetStCurrBefore[i] = k; // -1 == "no reference picture"
     if (k>=0) picInAnyList[k]=true;
     else {
@@ -1672,6 +1718,10 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
     int k = dpb.DPB_index_of_picture_with_POC(PocStCurrAfter[i], currentID);
 
     //printf("st curr after, poc=%d -> idx=%d\n",PocStCurrAfter[i], k);
+
+    printf("# RefPicSetStCurrAfter[%d]= %d for POC=%d ", i, k, PocStCurrAfter[i]);
+    if (k != -1 ) printf("(image-ID=%d, POC=%d)", dpb.get_image(k)->get_ID(), dpb.get_image(k)->PicOrderCntVal);
+    printf("\n");
 
     RefPicSetStCurrAfter[i] = k; // -1 == "no reference picture"
     if (k>=0) picInAnyList[k]=true;
@@ -1696,6 +1746,10 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
     int k = dpb.DPB_index_of_picture_with_POC(PocStFoll[i], currentID);
     // if (k<0) { assert(false); } // IGNORE
 
+    printf("# RefPicSetStFoll[%d]= %d for POC=%d", i, k, PocStFoll[i]);
+    if (k != -1 ) printf("(image-ID=%d, POC=%d)", dpb.get_image(k)->get_ID(), dpb.get_image(k)->PicOrderCntVal);
+    printf("\n");
+
     RefPicSetStFoll[i] = k; // -1 == "no reference picture"
     if (k>=0) picInAnyList[k]=true;
   }
@@ -1711,7 +1765,7 @@ void decoder_context::process_reference_picture_set(slice_segment_header* hdr)
           {
             if (dpbimg->PicState != UnusedForReference) {
               removeReferencesList.push_back(dpbimg->get_ID());
-              //printf("will remove ID %d (b)\n",dpbimg->get_ID());
+              printf("will remove ID %d (b)\n",dpbimg->get_ID());
 
               dpbimg->removed_at_picture_id = img->get_ID();
             }
@@ -2127,7 +2181,7 @@ void decoder_context::remove_images_from_dpb(const std::vector<int>& removeImage
   for (int i=0;i<removeImageList.size();i++) {
     int idx = dpb.DPB_index_of_picture_with_ID( removeImageList[i] );
     if (idx>=0) {
-      //printf("remove ID %d\n", removeImageList[i]);
+      printf("remove ID %d\n", removeImageList[i]);
       de265_image* dpbimg = dpb.get_image( idx );
       dpbimg->PicState = UnusedForReference;
     }

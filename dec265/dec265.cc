@@ -779,6 +779,7 @@ int main(int argc, char** argv)
               measure(img);
             }
 
+            printf("\n### OUTPUT IMAGE %p (ID=%d)###\n\n", img, img->get_ID());
             stop = output_image(img);
             if (stop) more=0;
             else      more=1;
